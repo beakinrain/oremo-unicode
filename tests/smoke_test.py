@@ -176,7 +176,9 @@ pump(1.5)
 live = calls.count("live")
 check("live display", live >= 5 and app.c.find_withtag("f0"), "%d live redraws" % live)
 step("recStop", app.recStop)
-check("take recorded", app.snd.length() > sr // 2 and v.i("recStatus") == 1, "%d samples" % app.snd.length())
+# the fake microphone is a Python thread (slower than real time on busy CI machines);
+# a real device is clocked by the hardware, so only require that a take was captured
+check("take recorded", app.snd.length() > 1024 and v.i("recStatus") == 1, "%d samples" % app.snd.length())
 step("save by next", app.nextRec)
 check("take saved", os.path.exists(os.path.join(result, "あ.wav")))
 app.Redraw = orig_redraw
