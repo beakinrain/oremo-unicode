@@ -42,6 +42,8 @@ jobs:
         run: |
           .venv/bin/pyinstaller oremo-mac.spec --noconfirm
           file dist/OREMO.app/Contents/MacOS/OREMO
+          plutil -p dist/OREMO.app/Contents/Info.plist
+          plutil -extract NSMicrophoneUsageDescription raw dist/OREMO.app/Contents/Info.plist
           codesign --force --deep --sign - dist/OREMO.app
           codesign --verify --verbose dist/OREMO.app
 
