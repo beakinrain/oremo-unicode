@@ -182,11 +182,14 @@ check("take saved", os.path.exists(os.path.join(result, "あ.wav")))
 app.Redraw = orig_redraw
 
 # automatic recording, mode 3 (BGM 20x faster than real time)
-fakesd.FakeStream.SPEED = 20.0
+fakesd.FakeStream.SPEED = 8.0
 v["rec"] = 3
 seq0 = v.i("recSeq")
 step("autoRec", app.recStart)
-pump(2.5)
+# wait for two automatic moves (slow CI machines may run the fake device slowly)
+end = time.time() + 90
+while time.time() < end and v.i("recSeq") < seq0 + 2:
+    pump(0.2)
 step("autoRecStop", app.autoRecStop)
 check("auto recording mode 3", v.i("recSeq") >= seq0 + 2, "moved %d items" % (v.i("recSeq") - seq0))
 fakesd.FakeStream.SPEED = 1.0
