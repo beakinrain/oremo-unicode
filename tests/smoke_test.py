@@ -7,10 +7,14 @@ no sound is played or recorded and no user settings are touched.
 Exits with status 1 if any check fails or any Tk callback raised.
 """
 
+import faulthandler
 import os
 import shutil
 import sys
 import tempfile
+
+# if anything blocks (e.g. a modal dialog), print where every thread is and exit
+faulthandler.dump_traceback_later(float(os.environ.get("OREMO_TEST_TIMEOUT", "240")), exit=True)
 import time
 import traceback
 import unicodedata
@@ -58,7 +62,9 @@ fd.askopenfilename = lambda **k: ""
 
 from oremo.app import OremoApp  # noqa: E402
 
+print("creating app", flush=True)
 app = OremoApp(top, [])
+print("app created", flush=True)
 errors = []
 app.root.report_callback_exception = lambda e, v, tb: errors.append("".join(traceback.format_exception(e, v, tb)))
 root, v = app.root, app.v
@@ -71,6 +77,7 @@ def check(name, cond, info=""):
 
 
 def step(name, fn):
+    print("  step:", name, flush=True)
     try:
         fn()
         root.update()

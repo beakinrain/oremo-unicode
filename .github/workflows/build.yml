@@ -31,10 +31,12 @@ jobs:
           .venv/bin/python -c "import tkinter, numpy, sounddevice; print('Tk', tkinter.TkVersion)"
 
       - name: Smoke test (zh_CN)
-        run: .venv/bin/python tests/smoke_test.py zh_CN
+        timeout-minutes: 8
+        run: .venv/bin/python -u tests/smoke_test.py zh_CN
 
       - name: Smoke test (ja)
-        run: .venv/bin/python tests/smoke_test.py ja
+        timeout-minutes: 8
+        run: .venv/bin/python -u tests/smoke_test.py ja
 
       - name: Build OREMO.app
         run: |
