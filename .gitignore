@@ -1,0 +1,10 @@
+﻿# Python / build artifacts
+.venv/
+__pycache__/
+*.pyc
+build/
+dist/
+# user data created at run time
+res/oremo-init.tcl
+res/result/*
+!res/result/.gitkeep

@@ -1,0 +1,45 @@
+#
+# OREMO main window menus (English)
+#
+set t(file)                 "File"
+set t(file,choosesaveDir)   "Change save folder"
+set t(file,readRecList)     "Open reclist"
+set t(file,saveRecList)     "Save reclist"
+set t(file,readTypeList)    "Open type list"
+set t(file,readCommentList) "Open comment file"
+set t(file,makeRecList)     "Make list from wav files in the save folder"
+set t(file,makeRecList,msg) "Reclist and type list were updated"
+set t(file,makeRecListFromUst)     "Make list from a ust file"
+set t(file,makeRecListFromUst,msg) "Reclist and type list were updated"
+set t(file,saveSettings)    "Save current settings to init file"
+set t(file,Exit)            "Exit"
+
+set t(show)                 "View"
+set t(show,showWave)        "Waveform"
+set t(show,showSpec)        "Spectrogram"
+set t(show,showpow)         "Power"
+set t(show,showf0)          "F0"
+set t(show,pitchGuide)      "Tuning fork window"
+set t(show,tempoGuide)      "Metronome"
+
+set t(option)               "Options"
+set t(option,removeDC)      "Remove DC offset after recording"
+set t(option,bgmGuide)      "Recording mode"
+set t(option,ioSettings)    "Audio I/O settings"
+set t(option,settings)      "Detailed settings"
+set t(option,setBind)       "Shortcut keys"
+set t(option,setFontSize)   "Font size"
+
+set t(oto)                  "Make oto.ini"
+set t(oto,auto)             "Recording type"
+set t(oto,auto,tandoku)     "Single (CV)"
+set t(oto,auto,renzoku)     "Continuous (VCV)"
+
+set t(help)                 "Help"
+set t(help,onlineHelp)      "Online manual"
+set t(help,Version)         "Version"
+set t(help,official1)       "Official web page"
+set t(help,official2)       "Official download page"
+
+set t(.saveDir.midashi)     "Save folder:"
+set t(.recComment.midashi)  "Search comment"
