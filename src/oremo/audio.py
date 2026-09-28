@@ -456,7 +456,13 @@ class Recorder:
         self.channels = int(channels)
         self.gain = gain
 
+        self.n_callbacks = 0
+        self.n_status = 0
+
         def callback(indata, frames, time, status):
+            self.n_callbacks += 1
+            if status:
+                self.n_status += 1
             if self.capturing:
                 with self.lock:
                     if self.capturing:

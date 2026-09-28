@@ -120,6 +120,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         self.topdir = _fwd(os.path.abspath(topdir))
         # files OREMO writes: next to the program (Windows) or in the user folder (macOS)
         self.userdir = _fwd(plat.user_dir(self.topdir))
+        self._open_logfile()
         pre = _peek_sysini(os.path.join(self.userdir, "oremo-setting.ini"))
         dpi_aware = pre.get("dpiAware", "1") != "0"
         if dpi_aware:
@@ -156,7 +157,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         self.unknown_init = []      # (array, key, value) kept for round trip
         self.custom_binds = []      # sequences bound by doSetBind
         self.console_win = None
-        self.log_lines = []
+        self.log_lines = getattr(self, "log_lines", [])
         self.bgm_rows = {}
         self.pa_rec_on = False      # "oremo-recorder.exe is running"
         self.pa_play_on = False     # "oremo-player.exe is running"
@@ -242,6 +243,9 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         v["winHeight"] = self.root.winfo_height()
         self.root.after(1000, lambda: self.root.bind("<Configure>", lambda e: self.changeWindowBorder()))
         self.root.after(20, self._poll_audio_queue)
+        self._start_watchdog()
+        self.log("Tk %s  scale %.3g  lang %s  userdir %s" % (
+            self.root.tk.call("info", "patchlevel"), self.S, self.lang, self.userdir))
 
     def run(self):
         self.root.mainloop()
@@ -680,16 +684,38 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         except Exception:
             pass
 
+    def _open_logfile(self):
+        """oremo.log in the user folder (macOS: ~/Library/Application Support/OREMO)."""
+        import time as _t
+        self._logf = None
+        self.log_lines = []
+        path = os.path.join(self.userdir, "oremo.log")
+        try:
+            mode = "w" if os.path.exists(path) and os.path.getsize(path) > 1000000 else "a"
+            self._logf = open(path, mode, encoding="utf-8", buffering=1)
+        except OSError:
+            self._logf = None
+        self.log("==== OREMO %s start  %s  python %s  %s" % (
+            VERSION, sys.platform, sys.version.split()[0], _t.strftime("%Y-%m-%d %H:%M:%S")))
+
     def log(self, text):
+        import time as _t
         self.log_lines.append(text)
         del self.log_lines[:-500]
         try:
             sys.stderr.write(text + "\n")
         except Exception:
             pass
-        if self.console_win is not None and self.console_win.winfo_exists():
-            self.console_win.text.insert("end", text + "\n")
-            self.console_win.text.see("end")
+        lf = getattr(self, "_logf", None)
+        if lf is not None:
+            try:
+                lf.write("%s %s\n" % (_t.strftime("%H:%M:%S"), text))
+            except Exception:
+                pass
+        cw = getattr(self, "console_win", None)
+        if cw is not None and cw.winfo_exists():
+            cw.text.insert("end", text + "\n")
+            cw.text.see("end")
 
     def _poll_audio_queue(self):
         try:
@@ -701,7 +727,31 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
                     self._bgerror(*sys.exc_info())
         except Exception:
             pass
+        self._heartbeat = __import__("time").time()
         self.root.after(15, self._poll_audio_queue)
+
+    def _start_watchdog(self):
+        """If the UI thread stops responding, write every thread's stack to oremo.log."""
+        import faulthandler
+        import threading
+        import time as _t
+        self._heartbeat = _t.time()
+
+        def watch():
+            dumped = 0.0
+            while True:
+                _t.sleep(2.0)
+                stall = _t.time() - self._heartbeat
+                if stall > 8.0 and _t.time() - dumped > 30.0 and self._logf is not None:
+                    dumped = _t.time()
+                    try:
+                        self._logf.write("!!!! UI not responding for %.0f s, stacks:\n" % stall)
+                        self._logf.flush()
+                        faulthandler.dump_traceback(file=self._logf, all_threads=True)
+                        self._logf.flush()
+                    except Exception:
+                        pass
+        threading.Thread(target=watch, daemon=True, name="oremo-watchdog").start()
 
     def _set_icon(self):
         ico = os.path.join(self.topdir, "oremo.ico")
@@ -1955,7 +2005,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             v["cWidth"] = v.i("cWidth") - int(round(40 * self.S))
         self.Redraw("scale")
         v["skipChangeWindowBorder"] = 1
-        self.root.update()
+        self.root.update_idletasks()
         v["skipChangeWindowBorder"] = 0
         fig = self.w(".fig")
         w = fig.winfo_x() + fig.winfo_width()
@@ -1970,7 +2020,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         elif width > 5:
             lb.configure(width=width - 1)
         v["skipChangeWindowBorder"] = 1
-        self.root.update()
+        self.root.update_idletasks()
         v["skipChangeWindowBorder"] = 0
         fig = self.w(".fig")
         w = fig.winfo_x() + fig.winfo_width()
@@ -2003,8 +2053,20 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
 
     def _open_recorder(self):
         p = self._rec_params()
-        self.recorder.open(p["device"], p["rate"], p["channels"], p["dtype"],
-                           blocksize=p["blocksize"], gain=p["gain"])
+        name = "default"
+        try:
+            if p["device"] is not None and audio.sd is not None:
+                name = audio.sd.query_devices(p["device"])["name"]
+        except Exception:
+            pass
+        self.log("rec open: device=%s (%s) rate=%s ch=%s dtype=%s" % (
+            p["device"], name, p["rate"], p["channels"], p["dtype"]))
+        try:
+            self.recorder.open(p["device"], p["rate"], p["channels"], p["dtype"],
+                               blocksize=p["blocksize"], gain=p["gain"])
+        except audio.AudioError as e:
+            self.log("rec open failed: %s" % e)
+            raise
         self._take_params = p
 
     def recStart(self):
@@ -2069,6 +2131,14 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         p = getattr(self, "_take_params", None) or self._rec_params()
         self.snd.set_data(data, p["rate"], p["enc"])
         self.snd.filename = ""
+        peak = float(np.max(np.abs(data))) if len(data) else 0.0
+        self.log("take: %d samples (%.2f s)  peak %.0f  callbacks %d  status-flags %d" % (
+            len(data), len(data) / float(p["rate"] or 1), peak,
+            getattr(self.recorder, "n_callbacks", -1), getattr(self.recorder, "n_status", -1)))
+        if len(data) == 0 or peak == 0.0:
+            # a real microphone never gives exact digital silence: usually the
+            # OS denied microphone access (macOS / Windows privacy settings)
+            self.v["msg"] = self.tt("recStop,silent", "No sound from the microphone.")
 
     def recStop(self):
         v = self.v
@@ -2339,7 +2409,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         lh = max(lh, 1)
         self.rec.configure(height=lh)
         self.type.configure(height=lh)
-        self.root.update()
+        self.root.update_idletasks()
         self.rec.see(v.i("recSeq"))
         self.type.see(v.i("typeSeq"))
 
@@ -2641,10 +2711,23 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             c.create_line(0, ylow, cW, ylow, tags="axis")
 
     def changeWindowBorder(self, w=None, h=None):
+        # Guarded against re-entry: on macOS a full update() inside the
+        # <Configure> handler delivers new <Configure> events, and resizing
+        # the list boxes / canvas here produced an endless resize loop
+        # (window hung when a panel was switched on in a maximized window).
+        if getattr(self, "_in_cwb", False):
+            return
+        self._in_cwb = True
+        try:
+            self._changeWindowBorder(w, h)
+        finally:
+            self._in_cwb = False
+
+    def _changeWindowBorder(self, w=None, h=None):
         v = self.v
         if v.i("skipChangeWindowBorder"):
             return
-        self.root.update()
+        self.root.update_idletasks()
         aw = w if w is not None else self.root.winfo_width()
         ah = h if h is not None else self.root.winfo_height()
         if v.i("winWidth") == aw and v.i("winHeight") == ah:
@@ -2903,7 +2986,8 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
 
     def toggleConsole(self):
         """Ctrl+Alt+d: the Tk console of the original is replaced by a log window."""
-        if self.console_win is not None and self.console_win.winfo_exists():
+        cw = getattr(self, "console_win", None)
+        if cw is not None and cw.winfo_exists():
             self.console_win.destroy()
             self.console_win = None
             self.conState = 0

@@ -96,3 +96,6 @@ set t(fontWindow,family)     "字体"
 set t(fontWindow,auto)       "自动 (选择能显示列表中全部文字的字体)"
 set t(fontWindow,familyNote) "※ 字体的更改立即生效"
 set t(tool,korede)          "KOREDE (引导BGM设置文件制作)..."
+
+# microphone gives only silence
+set t(recStop,silent)       "没有收到麦克风的声音。请检查麦克风权限 (macOS: 系统设置→隐私与安全性→麦克风 / Windows: 设置→隐私→麦克风)"

@@ -96,3 +96,6 @@ set t(fontWindow,family)     "フォント"
 set t(fontWindow,auto)       "自動 (リストの文字をすべて表示できるフォント)"
 set t(fontWindow,familyNote) "※ フォントの変更はすぐに反映されます"
 set t(tool,korede)          "KOREDE (ガイドBGM設定ファイル作成)..."
+
+# microphone gives only silence
+set t(recStop,silent)       "マイクから音が届いていません。マイクへのアクセス許可を確認してください (macOS: システム設定→プライバシーとセキュリティ→マイク / Windows: 設定→プライバシー→マイク)"

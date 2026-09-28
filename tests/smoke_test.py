@@ -196,6 +196,38 @@ step("autoRecStop", app.autoRecStop)
 check("auto recording mode 3", v.i("recSeq") >= seq0 + 2, "moved %d items" % (v.i("recSeq") - seq0))
 fakesd.FakeStream.SPEED = 1.0
 
+# reported on a MacBook Air: in a maximized window, record (microphone giving
+# silence), then switch spectrum / power / F0 on -> window hung
+pump(1.3)                     # the <Configure> handler is active from here on
+try:
+    root.state("zoomed")
+except tk.TclError:
+    root.geometry("%dx%d+0+0" % (root.winfo_screenwidth(), root.winfo_screenheight() - 80))
+pump(1.0)
+for key, fn in (("showSpec", app.toggleSpec), ("showpow", app.togglePow), ("showf0", app.toggleF0)):
+    v[key] = 0
+    step("off " + key, fn)
+    pump(0.3)
+fakesd.FakeStream.SILENT = True
+v["rec"] = 1
+step("silent recStart", app.recStart)
+pump(1.0)
+step("silent recStop", app.recStop)
+fakesd.FakeStream.SILENT = False
+check("silent microphone warning", v["msg"] == app.tt("recStop,silent"), v["msg"][:40])
+for key, fn in (("showSpec", app.toggleSpec), ("showpow", app.togglePow), ("showf0", app.toggleF0)):
+    v[key] = 1
+    step("on " + key, fn)
+    pump(0.5)
+heights = [v.i(k) for k in ("waveh", "spech", "powh", "f0h")]
+check("panels in maximized window", all(h > 0 for h in heights), "heights %s" % heights)
+step("next after silent take", app.nextRec)
+try:
+    root.state("normal")
+except tk.TclError:
+    pass
+pump(0.5)
+
 # fonts: a simplified Chinese list must get a font that has all its glyphs
 open(os.path.join(top, "zh.txt"), "wb").write("萨迪克进化\n三等奖\n山东科技\nあいう\n".encode("gbk"))
 step("zh reclist", lambda: (app.readRecList(os.path.join(top, "zh.txt")), app.resetDisplay()))

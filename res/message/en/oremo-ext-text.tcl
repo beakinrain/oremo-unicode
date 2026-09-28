@@ -90,3 +90,6 @@ set t(fontWindow,family)     "Font"
 set t(fontWindow,auto)       "Auto (a font that has every character of the lists)"
 set t(fontWindow,familyNote) "* The font change takes effect immediately"
 set t(tool,korede)          "KOREDE (guide BGM setting file maker)..."
+
+# microphone gives only silence
+set t(recStop,silent)       "No sound from the microphone. Check microphone permission (macOS: System Settings > Privacy & Security > Microphone / Windows: Settings > Privacy > Microphone)"
