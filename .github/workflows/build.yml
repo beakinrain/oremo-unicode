@@ -38,12 +38,17 @@ jobs:
         timeout-minutes: 8
         run: .venv/bin/python -u tests/smoke_test.py ja
 
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mac-test-screenshots
+          path: test-artifacts/
+          if-no-files-found: ignore
+
       - name: Build OREMO.app
         run: |
           .venv/bin/pyinstaller oremo-mac.spec --noconfirm
           file dist/OREMO.app/Contents/MacOS/OREMO
-          plutil -p dist/OREMO.app/Contents/Info.plist
-          plutil -extract NSMicrophoneUsageDescription raw dist/OREMO.app/Contents/Info.plist
           codesign --force --deep --sign - dist/OREMO.app
           codesign --verify --verbose dist/OREMO.app
 

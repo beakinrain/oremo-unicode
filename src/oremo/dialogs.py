@@ -233,8 +233,8 @@ class DialogsMixin:
                     shortcut2 = "KeyRelease-" + shortcut.split("KeyPress-")[-1]
                 else:
                     shortcut2 = shortcut.replace("KeyPress", "KeyRelease")
-                self.root.bind("<%s>" % shortcut, lambda e: self.recStart())
-                self.root.bind("<%s>" % shortcut2, lambda e: self.recStop())
+                self.root.bind("<%s>" % shortcut, lambda e: self.recKeyPress())
+                self.root.bind("<%s>" % shortcut2, lambda e: self.recKeyRelease())
                 self.root.event_add("<<EditComment>>", "<%s>" % shortcut)
                 self.root.event_add("<<EditComment>>", "<%s>" % shortcut2)
                 self.custom_binds += ["<%s>" % shortcut, "<%s>" % shortcut2]

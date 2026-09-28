@@ -14,7 +14,6 @@ class CallbackStop(Exception):
 
 class FakeStream:
     SPEED = 1.0   # 1.0 = real time
-    SILENT = False  # True: input delivers digital silence (like a denied microphone)
 
     def __init__(self, samplerate=44100, channels=1, dtype="float32", device=None, callback=None,
                  finished_callback=None, blocksize=0, latency=None, kind="out"):
@@ -40,7 +39,7 @@ class FakeStream:
                     ph = 2 * np.pi * 220 * t
                     sig = sum(np.sin(k * ph) / k for k in range(1, 8))
                     amp = 6000 if self.dtype == "int16" else 6000 * 65536
-                    data = (sig * amp * (0 if self.SILENT else 1)).astype(self.dtype).reshape(-1, 1)
+                    data = (sig * amp).astype(self.dtype).reshape(-1, 1)
                     self.cb(np.repeat(data, self.ch, axis=1), self.bs, None, None)
                 n += self.bs
             except CallbackStop:
