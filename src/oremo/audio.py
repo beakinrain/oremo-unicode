@@ -222,6 +222,7 @@ class Player:
         self.rate = 44100
         self.on_done = None
         self.token = 0
+        self.volume = 1.0   # live volume factor (can change while playing)
 
     def active(self):
         return self.stream is not None
@@ -264,7 +265,9 @@ class Player:
                 p = self.pos
                 m = min(frames, self.end_pos - p)
                 if m > 0:
-                    outdata[:m] = self.buf[p:p + m]
+                    seg = self.buf[p:p + m]
+                    vol = self.volume
+                    outdata[:m] = seg if vol == 1.0 else np.clip(seg * vol, -1.0, 1.0)
                 if m < frames:
                     outdata[max(m, 0):] = 0
                 self.pos = p + max(m, 0)
@@ -546,6 +549,7 @@ class AutoRecEngine:
         self.stream = None
         self.lock = threading.Lock()
         self.token = 0
+        self.volume = 1.0   # guide BGM volume (can change while playing)
         self.handler = None
         self.pos = 0
 
@@ -619,7 +623,8 @@ class AutoRecEngine:
                 seg = buf[max(0, p):max(0, p + m)] if p < len(buf) else buf[0:0]
                 k = len(seg)
                 if k:
-                    outdata[done:done + k, 0] = seg
+                    vol = self.volume
+                    outdata[done:done + k, 0] = seg if vol == 1.0 else np.clip(seg * vol, -1.0, 1.0)
                 if k < m:
                     outdata[done + k:done + m, 0] = 0
                 done += m

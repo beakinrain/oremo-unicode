@@ -99,3 +99,7 @@ set t(tool,korede)          "KOREDE (ガイドBGM設定ファイル作成)..."
 
 # microphone gives only silence
 set t(recStop,silent)       "マイクから音が届いていません。マイクへのアクセス許可を確認してください (macOS: システム設定→プライバシーとセキュリティ→マイク / Windows: 設定→プライバシー→マイク)"
+
+# guide BGM volume
+set t(bgmGuide,volume)     "BGM音量："
+set t(bgmGuide,volumeNote) "※ 自動録音と試聴に適用 (100%=元の音量)"

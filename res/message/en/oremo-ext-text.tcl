@@ -93,3 +93,7 @@ set t(tool,korede)          "KOREDE (guide BGM setting file maker)..."
 
 # microphone gives only silence
 set t(recStop,silent)       "No sound from the microphone. Check microphone permission (macOS: System Settings > Privacy & Security > Microphone / Windows: Settings > Privacy > Microphone)"
+
+# guide BGM volume
+set t(bgmGuide,volume)     "BGM volume:"
+set t(bgmGuide,volumeNote) "* for automatic recording and preview (100% = original)"

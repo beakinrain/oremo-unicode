@@ -22,6 +22,8 @@ class FakeStream:
         self.bs = blocksize or 1024
         self.kind = kind
         self.running = False
+        self.peak = 0.0          # largest |sample| handed to an output stream
+        FakeSD.last[kind] = self
 
     def start(self):
         self.running = True
@@ -34,6 +36,7 @@ class FakeStream:
                 if self.kind == "out":
                     buf = np.zeros((self.bs, self.ch), dtype=np.float32)
                     self.cb(buf, self.bs, None, None)
+                    self.peak = max(self.peak, float(np.max(np.abs(buf))))
                 else:
                     t = (n + np.arange(self.bs)) / self.rate
                     ph = 2 * np.pi * 220 * t
@@ -58,6 +61,7 @@ class FakeStream:
 
 class FakeSD:
     CallbackStop = CallbackStop
+    last = {}
 
     def OutputStream(self, **kw):
         return FakeStream(kind="out", **kw)

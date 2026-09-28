@@ -423,6 +423,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         v["clickWav"] = topdir + "/guideBGM/click.wav"
         v["bgmFile"] = topdir + "/guideBGM/F4-100bpm.wav"
         v["bgmParamFile"] = topdir + "/guideBGM/F4-100bpm.txt"
+        v["bgmVolume"] = 100   # guide BGM volume in % (Unicode edition)
         v["setE"] = 1
 
         self.bgmParam["autoRecStatus"] = 0
@@ -1013,6 +1014,10 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             self.root.bind("<Command-f>", lambda e: self.searchComment())
         self._bind_panel_drag()
         self._bind_list_drag()
+        # guide BGM volume follows the slider immediately, also while playing
+        self.tk.call("trace", "add", "variable", "v(bgmVolume)", "write",
+                     self.root.register(lambda *a: self._apply_bgm_volume()))
+        self._apply_bgm_volume()
 
         self.doSetBind()
 
@@ -2153,6 +2158,15 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         # later breaks "bgm play -start ..."
         raise ValueError('expected integer but got "int(%s)"' % tclfmt.format_list([str(val)]))
 
+    def bgm_volume(self):
+        """Guide BGM volume factor (v(bgmVolume) is in percent, 0-200)."""
+        return min(max(self.v.f("bgmVolume", 100.0), 0.0), 200.0) / 100.0
+
+    def _apply_bgm_volume(self):
+        vol = self.bgm_volume()
+        self.bgm_player.volume = vol
+        self.auto_engine.volume = vol
+
     def autoRecStart(self):
         v, t = self.v, self.tt
         if self.audio_busy() and not self.fix("F11"):
@@ -2240,6 +2254,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         def can_next():
             return self._rec_seq_cache < self._rec_len_cache - 1
 
+        self._apply_bgm_volume()
         try:
             self.auto_engine.start(self.bgm.data, self.bgm.rate, rows, mode, self._autoRecEvent,
                                    can_next, device=dev, gain=gain)

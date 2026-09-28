@@ -388,6 +388,16 @@ class DialogsMixin:
         tk.Button(fi, image=self.icons["snackPlay"], command=sample).pack(side="left")
         tk.Button(fi, image=self.icons["snackStop"], command=self.testStopBGM).pack(side="left")
         fi.grid(row=5, column=1, sticky="ewsn")
+        # guide BGM volume (Unicode edition): applied immediately, also while playing
+        tk.Label(w, text=t("bgmGuide,volume", "BGM volume:")).grid(row=6, column=0, sticky="e")
+        fv = tk.Frame(w, name="fVol")
+        s = getattr(self, "S", 1.0)
+        self._mkscale(fv, variable="v(bgmVolume)", orient="horizontal", from_=0, to=200, resolution=1,
+                      showvalue=1, length=int(round(240 * s))).pack(side="left")
+        tk.Label(fv, text="%").pack(side="left", anchor="s")
+        tk.Button(fv, text="100%", command=lambda: v.__setitem__("bgmVolume", 100)).pack(side="left", padx=4)
+        tk.Label(fv, text=t("bgmGuide,volumeNote", ""), fg="#404040").pack(side="left", padx=4)
+        fv.grid(row=6, column=1, sticky="w")
 
     def testPlayBGM(self, fname):
         t = self.tt
@@ -404,6 +414,7 @@ class DialogsMixin:
             messagebox.showwarning(t("testPlayBGM,errTitle"), "%s\n%s" % (self.msg("testPlayBGM,errMsg"), e))
             return
         dev, gain, lat, bs = self.out_device()
+        self._apply_bgm_volume()
         try:
             self.bgm_player.play(self.bgm.data, self.bgm.rate, device=dev, gain=gain)
         except audio.AudioError as e:

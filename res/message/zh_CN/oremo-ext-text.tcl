@@ -99,3 +99,7 @@ set t(tool,korede)          "KOREDE (引导BGM设置文件制作)..."
 
 # microphone gives only silence
 set t(recStop,silent)       "没有收到麦克风的声音。请检查麦克风权限 (macOS: 系统设置→隐私与安全性→麦克风 / Windows: 设置→隐私→麦克风)"
+
+# guide BGM volume
+set t(bgmGuide,volume)     "BGM音量："
+set t(bgmGuide,volumeNote) "※ 用于自动录音和试听 (100%=原始音量)"

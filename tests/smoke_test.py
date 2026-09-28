@@ -189,6 +189,7 @@ opens = []
 orig_open = app.recorder.open
 app.recorder.open = lambda *a, **k: (opens.append(1), orig_open(*a, **k))
 sw, sh = root.winfo_screenwidth(), root.winfo_screenheight()
+print("screen", sw, sh, "focus", root.focus_get(), flush=True)
 step("maximize", lambda: root.geometry("%dx%d+0+0" % (sw, sh - 100)))
 pump(1.0)
 step("goto", lambda: app.jumpRec(3))
@@ -239,6 +240,27 @@ while time.time() < end and v.i("recSeq") < seq0 + 2:
 step("autoRecStop", app.autoRecStop)
 check("auto recording mode 3", v.i("recSeq") >= seq0 + 2, "moved %d items" % (v.i("recSeq") - seq0))
 fakesd.FakeStream.SPEED = 1.0
+
+# guide BGM volume: output level follows the slider, also while playing
+def bgm_peak(vol, change_to=None):
+    v["bgmVolume"] = vol
+    app.testPlayBGM(v["bgmFile"])
+    pump(0.6)
+    st = fakesd.FakeSD.last.get("out")
+    if change_to is not None and st is not None:
+        st.peak = 0.0
+        v["bgmVolume"] = change_to
+        pump(0.6)
+    app.testStopBGM()
+    return st.peak if st is not None else 0.0
+p100 = bgm_peak(100)
+p50 = bgm_peak(50)
+plive = bgm_peak(100, change_to=25)
+check("BGM volume 50%", p100 > 0 and abs(p50 / p100 - 0.5) < 0.1, "peak100=%.3f peak50=%.3f" % (p100, p50))
+check("BGM volume live change", p100 > 0 and plive < p100 * 0.4, "after 25%%: %.3f" % plive)
+check("BGM volume in players", app.bgm_player.volume == 0.25 and app.auto_engine.volume == 0.25)
+v["bgmVolume"] = 100
+step("bgm window", app.bgmGuide)
 
 # fonts: a simplified Chinese list must get a font that has all its glyphs
 open(os.path.join(top, "zh.txt"), "wb").write("萨迪克进化\n三等奖\n山东科技\nあいう\n".encode("gbk"))
