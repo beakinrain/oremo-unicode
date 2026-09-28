@@ -141,7 +141,22 @@ def mme_devices(kind):
     """Devices of the MME host API (what Snack used on Windows)."""
     devs = list_devices(kind)
     mme = [d for d in devs if d[2] == "MME"]
-    return mme if mme else devs
+    if mme:
+        return mme
+    # other systems (macOS CoreAudio): system default device first
+    dflt = default_device(kind)
+    devs.sort(key=lambda d: 0 if d[0] == dflt else 1)
+    return devs
+
+
+def system_api_label():
+    """Label of the 'Snack' section in the audio I/O window."""
+    import sys
+    if sys.platform == "win32":
+        return "Snack (MME)"
+    if sys.platform == "darwin":
+        return "Snack (CoreAudio)"
+    return "Snack"
 
 
 def pa_device_label(d):

@@ -2,6 +2,7 @@
 file name mojibake repair, language selection and bug-fix switches."""
 
 import os
+import unicodedata
 import tkinter as tk
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
@@ -13,6 +14,12 @@ READ_CHOICES = [textenc.AUTO] + [e for e, _ in textenc.ENCODINGS] + [textenc.SYS
 WRITE_CHOICES = [e for e, _ in textenc.ENCODINGS] + [textenc.SYSTEM]
 FALLBACK_CHOICES = ["utf-8-sig", "utf-8", "gb18030", "none"]
 TEXT_PATTERNS = (".txt", ".ini", ".ust", ".tcl", ".csv", ".lab")
+
+
+def _same_name(a, b):
+    """True if two names denote the same file on a case / normalization insensitive file system."""
+    n = lambda s: unicodedata.normalize("NFC", s).lower()
+    return n(a) == n(b)
 
 
 def _labels(choices, extra=None):
@@ -59,6 +66,8 @@ class ToolsMixin:
             sub.add_command(label=textenc.label(enc), command=lambda e=enc: self.reloadRecListWith(e))
         m.add_command(label=t("tool,converter", "Encoding / file name converter..."),
                       command=self.converterWindow)
+        m.add_command(label=t("tool,korede", "KOREDE (guide BGM setting file maker)..."),
+                      command=self.launchKorede)
         m.add_separator()
         lang = tk.Menu(m, tearoff=0)
         m.add_cascade(label=t("tool,language", "Language"), menu=lang)
@@ -86,6 +95,22 @@ class ToolsMixin:
                             self.tt("tool,restartMsg", "The change takes effect after restarting OREMO."))
 
     # ------------------------------------------------------------------
+
+    def launchKorede(self):
+        """Start KOREDE as a separate process."""
+        import subprocess
+        import sys
+        if getattr(sys, "frozen", False):
+            exe_dir = os.path.dirname(os.path.abspath(sys.executable))
+            kexe = os.path.join(exe_dir, "korede.exe")
+            cmd = [kexe] if os.path.exists(kexe) else [sys.executable, "--korede"]
+        else:
+            main = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "oremo_main.py")
+            cmd = [sys.executable, main, "--korede"]
+        try:
+            subprocess.Popen(cmd)
+        except OSError as e:
+            messagebox.showerror(self.tt(".confm.errTitle"), str(e))
 
     def setLanguage(self, code):
         self.set_ini("lang", code)
@@ -447,7 +472,12 @@ class ConverterWindow:
         n = 0
         for root, name, isdir in entries:
             base, ext = (name, "") if isdir else os.path.splitext(name)
-            fixed, w_, r_ = textenc.repair_mojibake(base, wrong, real)
+            nfc = unicodedata.normalize("NFC", base)
+            if nfc != base:
+                # macOS decomposed name (か+゛): recompose, no code page involved
+                fixed, w_, r_ = nfc, "NFD", "NFC"
+            else:
+                fixed, w_, r_ = textenc.repair_mojibake(base, wrong, real)
             if not fixed or fixed == base:
                 continue
             newname = fixed + ext
@@ -455,7 +485,7 @@ class ConverterWindow:
             status = ""
             if bad:
                 status = t("conv,invalid", "invalid char")
-            elif os.path.exists(os.path.join(root, newname)) and newname.lower() != name.lower():
+            elif os.path.exists(os.path.join(root, newname)) and _same_name(newname, name) is False:
                 status = t("conv,exists", "exists")
             rel = os.path.relpath(os.path.join(root, name), d)
             iid = self.ntree.insert("", "end", text=rel, values=(newname, "%s→%s" % (w_, r_), status))
@@ -475,7 +505,7 @@ class ConverterWindow:
                 continue
             src = os.path.join(root, old)
             dst = os.path.join(root, new)
-            if os.path.exists(dst) and old.lower() != new.lower():
+            if os.path.exists(dst) and _same_name(old, new) is False:
                 self.ntree.set(iid, "status", t("conv,exists", "exists"))
                 continue
             try:

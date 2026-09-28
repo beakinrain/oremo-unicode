@@ -920,7 +920,7 @@ class DialogsMixin:
         pa_bk = pa.snapshot()
         req_bk = {"rec": self.pa_rec_on, "play": self.pa_play_on}
 
-        sf = tk.LabelFrame(w, name="sf", text="Snack (MME)", relief="groove", padx=5, pady=5)
+        sf = tk.LabelFrame(w, name="sf", text=audio.system_api_label(), relief="groove", padx=5, pady=5)
         sf.pack(fill="both", expand=False)
         ins = [d[1] for d in audio.mme_devices("input")] or ["none"]
         outs = [d[1] for d in audio.mme_devices("output")] or ["none"]

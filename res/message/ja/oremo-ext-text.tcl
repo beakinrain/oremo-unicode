@@ -95,3 +95,4 @@ set t(tool,dpiAware)        "高解像度ディスプレイでくっきり表示
 set t(fontWindow,family)     "フォント"
 set t(fontWindow,auto)       "自動 (リストの文字をすべて表示できるフォント)"
 set t(fontWindow,familyNote) "※ フォントの変更はすぐに反映されます"
+set t(tool,korede)          "KOREDE (ガイドBGM設定ファイル作成)..."

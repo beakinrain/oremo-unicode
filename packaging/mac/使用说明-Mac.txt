@@ -1,0 +1,36 @@
+OREMO Unicode 版 (Mac / Apple Silicon)
+=====================================
+
+■ 安装
+  把 OREMO.app 拖到「应用程序 (Applications)」文件夹。
+
+■ 第一次打开 (重要)
+  本程序没有 Apple 开发者签名，第一次打开时 macOS 会提示“无法验证开发者”
+  或“已损坏”。请按以下任一方法放行（只需一次）：
+
+  方法1: 双击 OREMO 被拦截后，打开「系统设置 → 隐私与安全性」，
+         在下方找到 OREMO 的提示，点「仍要打开」，再输入密码确认。
+
+  方法2: 打开「终端」，粘贴下面一行并回车：
+         xattr -dr com.apple.quarantine /Applications/OREMO.app
+
+  之后第一次录音时，系统会询问是否允许 OREMO 使用麦克风，请点「允许」。
+  (如果误点了拒绝：系统设置 → 隐私与安全性 → 麦克风 → 打开 OREMO)
+
+■ 文件位置
+  录音保存位置 (默认) : 文稿/OREMO/result   (可在程序下方「保存文件夹」更改)
+  设置文件            : ~/Library/Application Support/OREMO/
+                        (oremo-setting.ini, oremo-init.tcl)
+
+■ 与 Windows 版的区别
+  - 快捷键与 Windows 版相同 (r 录音、方向键移动、空格播放 …)，另外 ⌘P 播放、⌘F 搜索、⌘Q 退出。
+  - 右键菜单：触控板双指点按，或按住 Control 单击波形。
+  - 「高级设置」也可以从菜单「OREMO → 设置…」打开。
+  - KOREDE (引导BGM设置文件制作工具) 在菜单「工具」中启动。
+  - 文件名的假名浊点 (が/ぱ 等) 在 Mac 上可能被拆成两个字符，程序会自动统一处理；
+    「工具 → 文字编码／文件名 转换工具 → 修复乱码文件名」也可以把它们改回正常写法。
+  - oto.ini 默认以 Shift_JIS 保存 (与 UTAU 兼容)，可在「工具 → 文字编码设置」中更改。
+
+■ 源代码与许可证
+  GPL v2。源代码: https://github.com/beakinrain/oremo-unicode
+  原版 OREMO: nwp8861  http://nwp8861.web.fc2.com/soft/oremo/

@@ -44,6 +44,24 @@ python src/oremo_main.py          # 直接运行
 powershell -File build.ps1        # 打包到 dist/OREMO
 ```
 
+## macOS 版 (Apple Silicon)
+
+由 GitHub Actions 在云端 Mac 上自动测试并打包（见 `.github/workflows/build.yml`、
+`oremo-mac.spec`）。每次推送后，在仓库的 Actions 页面下载 `OREMO-mac-arm64`（.dmg）；
+推送 `v*` 标签时会发布到 Releases。安装与首次打开的方法见
+[packaging/mac/使用说明-Mac.txt](packaging/mac/使用说明-Mac.txt)。
+
+Mac 版的差异：设置文件保存在 `~/Library/Application Support/OREMO/`，默认录音文件夹为
+`~/Documents/OREMO/result`；⌘P / ⌘F / ⌘Q；右键 = 双指点按或 Control+单击；
+文件名的 NFD（拆开的浊点）自动统一为 NFC。
+
+## 测试
+
+```
+python tests/smoke_test.py zh_CN
+```
+使用虚拟音频设备，不会使用真实的麦克风和扬声器。
+
 ## 第三方组件
 
 打包后的程序包含以下组件，均为 GPL v2 兼容许可：

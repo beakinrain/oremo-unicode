@@ -2,6 +2,7 @@
 
 import os
 import re
+import sys
 import tkinter as tk
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
@@ -52,12 +53,13 @@ KEYS = ["bgmStart", "recStart", "uttStart", "uttEnd", "recEnd", "bgmEnd"]
 
 
 class Korede:
-    def __init__(self, topdir):
+    def __init__(self, topdir, ini_dir=None):
         self.topdir = topdir
+        self.ini_path = os.path.join(ini_dir or os.path.join(topdir, ".."), "oremo-setting.ini")
         self.lang = self._lang()
         self.m = MSG.get(self.lang, MSG["ja"])
         from .app import _peek_sysini, enable_dpi_awareness, setup_scaling
-        pre = _peek_sysini(os.path.join(self.topdir, "..", "oremo-setting.ini"))
+        pre = _peek_sysini(self.ini_path)
         aware = pre.get("dpiAware", "1") != "0"
         if aware:
             enable_dpi_awareness()
@@ -89,7 +91,7 @@ class Korede:
 
     def _lang(self):
         try:
-            text, _ = textenc.read_text(os.path.join(self.topdir, "..", "oremo-setting.ini"))
+            text, _ = textenc.read_text(self.ini_path)
             m = re.search(r"^lang=(\S+)", text, re.M)
             if m:
                 return m.group(1)
@@ -136,7 +138,8 @@ class Korede:
             tk.Label(f, text=m[b]).grid(row=i, column=5, sticky="ne")
             tk.Entry(f, width=5, textvariable=self.v[b], validate="all", validatecommand=vc).grid(row=i, column=6, sticky="nwse")
             tk.Entry(f, textvariable=self.v[b + "Msg"]).grid(row=i, column=7, sticky="nwse")
-            tk.Button(f, image=self.icons["snackPlay"], bg=color,
+            mac = dict(highlightbackground=color, highlightthickness=3) if sys.platform == "darwin" else {}
+            tk.Button(f, image=self.icons["snackPlay"], bg=color, **mac,
                       command=lambda a=a, b=b: self.region(a, b)).grid(row=i, column=8, sticky="n")
         f = tk.Frame(r)
         f.grid(row=3, column=0, sticky="nwse")

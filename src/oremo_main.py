@@ -1,19 +1,20 @@
-"""OREMO (Unicode edition) launcher."""
+"""OREMO (Unicode edition) launcher.
 
-import os
+``oremo --korede`` starts the guide BGM setting tool KOREDE instead (used
+by the macOS .app, which contains a single executable).
+"""
+
 import sys
 
 
-def topdir():
-    if getattr(sys, "frozen", False):
-        return os.path.dirname(os.path.abspath(sys.executable))
-    here = os.path.dirname(os.path.abspath(__file__))
-    return os.path.normpath(os.path.join(here, "..", "res"))
-
-
 def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "--korede":
+        from korede_main import main as korede
+        korede()
+        return
+    from oremo import plat
     from oremo.app import OremoApp
-    app = OremoApp(topdir(), sys.argv[1:])
+    app = OremoApp(plat.resource_dir(), sys.argv[1:])
     app.run()
 
 

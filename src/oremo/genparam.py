@@ -9,7 +9,7 @@ import tkinter.messagebox as messagebox
 
 import numpy as np
 
-from . import audio, dsp, textenc
+from . import audio, dsp, plat, textenc
 from .state import TVar
 
 VA = set("あかさたなはまやらわがざだばぱゃぁゎアカサタナハマヤラワガザダバパャァヮ")
@@ -318,7 +318,7 @@ class GenParamMixin:
             names = []
         for fn in names:
             if fn.lower().endswith(ext) and fn[:-len(ext)] != "":
-                recList.append(fn[:-len(ext)])
+                recList.append(plat.nfc(fn[:-len(ext)]))
         self.initParamS()
         self.initParamU(1)
         self._work_cache = None

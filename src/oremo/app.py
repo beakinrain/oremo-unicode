@@ -14,7 +14,7 @@ import webbrowser
 
 import numpy as np
 
-from . import audio, dsp, fixes, snackui, tclfmt, textenc
+from . import audio, dsp, fixes, plat, snackui, tclfmt, textenc
 from .audio import Sound
 from .dialogs import DialogsMixin
 from .genparam import GenParamMixin
@@ -73,6 +73,16 @@ def enable_dpi_awareness():
 
 def setup_scaling(root, ui_scale, dpi_aware):
     """Return the pixel scale factor S (1.0 = 96 dpi) and make Tk fonts follow it."""
+    if plat.IS_MAC:
+        # Tk on macOS works in points and draws Retina displays sharply by itself
+        try:
+            S = float(ui_scale) if ui_scale not in ("", "auto") else 1.0
+        except ValueError:
+            S = 1.0
+        S = max(0.5, min(S, 4.0))
+        if abs(S - 1.0) > 1e-3:
+            root.tk.call("tk", "scaling", float(root.tk.call("tk", "scaling")) * S)
+        return S
     sys_scale = root.winfo_fpixels("1i") / 96.0 if dpi_aware else 1.0
     try:
         S = float(ui_scale) if ui_scale not in ("", "auto") else sys_scale
@@ -108,7 +118,9 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
 
     def __init__(self, topdir, argv):
         self.topdir = _fwd(os.path.abspath(topdir))
-        pre = _peek_sysini(os.path.join(self.topdir, "oremo-setting.ini"))
+        # files OREMO writes: next to the program (Windows) or in the user folder (macOS)
+        self.userdir = _fwd(plat.user_dir(self.topdir))
+        pre = _peek_sysini(os.path.join(self.userdir, "oremo-setting.ini"))
         dpi_aware = pre.get("dpiAware", "1") != "0"
         if dpi_aware:
             enable_dpi_awareness()
@@ -243,7 +255,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         v["version"] = VERSION
         v["recListFile"] = topdir + "/reclist.txt"
         v["typeListFile"] = topdir + "/typelist.txt"
-        v["saveDir"] = topdir + "/result"
+        v["saveDir"] = _fwd(plat.default_save_dir(topdir))
         v["paramFile"] = v["saveDir"] + "/oto.ini"
         v["yaxisw"] = 40
         v["timeh"] = 20
@@ -400,8 +412,8 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         s["readCommentList"] = 1
         s["makeRecListFromDir"] = 0
         s["choosesaveDir"] = 0
-        s["initFile"] = topdir + "/oremo-init.tcl"
-        s["sysIniFile"] = topdir + "/oremo-setting.ini"
+        s["initFile"] = self.userdir + "/oremo-init.tcl"
+        s["sysIniFile"] = self.userdir + "/oremo-setting.ini"
         s["textFile"] = topdir + "/message/oremo-text.tcl"
         s["procTextFile"] = topdir + "/message/proc-text.tcl"
 
@@ -618,17 +630,25 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             sys.exit(1)
 
     def _guess_lang(self):
-        try:
-            import ctypes
-            lid = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
-            if lid == 0x04:
-                return "zh_CN"
-            if lid == 0x11:
-                return "ja"
-        except Exception:
-            pass
+        if plat.IS_WIN:
+            try:
+                import ctypes
+                lid = ctypes.windll.kernel32.GetUserDefaultUILanguage() & 0x3FF
+                if lid == 0x04:
+                    return "zh_CN"
+                if lid == 0x11:
+                    return "ja"
+            except Exception:
+                pass
+        if plat.IS_MAC:
+            lg = plat.mac_system_lang()
+            if lg:
+                return lg
         import locale
-        loc = (locale.getdefaultlocale()[0] or "").lower()
+        try:
+            loc = (locale.getlocale()[0] or os.environ.get("LANG", "")).lower()
+        except Exception:
+            loc = os.environ.get("LANG", "").lower()
         if loc.startswith("zh"):
             return "zh_CN"
         if loc.startswith("ja"):
@@ -979,7 +999,18 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         rec.bind("<Control-MouseWheel>", self._rec_ctrl_wheel)
         typ.bind("<Control-MouseWheel>", self._type_ctrl_wheel)
         root.bind("<Shift-MouseWheel>", self._shift_wheel)
-        self.c.bind("<Button-3>", lambda e: self.PopUpMenu(e.x_root, e.y_root, e.x, e.y))
+        popup = lambda e: self.PopUpMenu(e.x_root, e.y_root, e.x, e.y)
+        self.c.bind("<Button-3>", popup)
+        if plat.IS_MAC:
+            # macOS: secondary click is Button-2 in Tk, and Control+click
+            self.c.bind("<Button-2>", popup)
+            self.c.bind("<Control-Button-1>", popup)
+            # application menu: About / Preferences / Quit (⌘Q)
+            self.root.createcommand("tk::mac::Quit", self.Exit)
+            self.root.createcommand("tk::mac::ShowPreferences", self.settings)
+            self.root.createcommand("tk::mac::standardAboutPanel", self.Version)
+            self.root.bind("<Command-p>", lambda e: self.togglePlay())
+            self.root.bind("<Command-f>", lambda e: self.searchComment())
         self._bind_panel_drag()
         self._bind_list_drag()
 
@@ -1256,7 +1287,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
                 continue
             if not os.path.isfile(os.path.join(d, fn)):
                 continue
-            base = fn[:-len(ext)]
+            base = plat.nfc(fn[:-len(ext)])
             if base == "":
                 continue
             recList.append(base)
@@ -1338,7 +1369,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         if keyList:
             for i, comm in enumerate(lines):
                 comm = comm.rstrip("\r")
-                key = keyList[i] if i < len(keyList) else ""
+                key = plat.nfc(keyList[i]) if i < len(keyList) else ""
                 if key != "" and comm != "":
                     if key in self.comments:
                         ignoreNum += 1
@@ -1351,7 +1382,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
                     line = re.sub(r"^\s+", "", line)
                     m = re.match(r"^([^\s:]+)[\s:](.+)$", line)
                     if m:
-                        key, comm = m.group(1), m.group(2)
+                        key, comm = plat.nfc(m.group(1)), m.group(2)
                         if key in self.comments:
                             ignoreNum += 1
                         self.comments[key] = comm
@@ -1391,7 +1422,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         return keyList
 
     def _split_list_text(self, data):
-        return [x for x in re.split(r"\s", data) if x != ""]
+        return [plat.nfc(x) for x in re.split(r"\s", data) if x != ""]
 
     def readRecList(self, fn=None):
         v = self.v
@@ -1469,7 +1500,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             for line in data.split("\n"):
                 d = line.rstrip("\r").split("=")
                 if len(d) > 1 and d[0] == "Lyric":
-                    val = d[1]
+                    val = plat.nfc(d[1])
                     if self.fix("F10") and (val.strip() == "" or val.strip() in ("R", "r")):
                         continue
                     if val not in rl:
@@ -1495,12 +1526,20 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
     # therefore chosen by what Tk really resolves and by checking with GDI
     # that the font contains every character of the lists.
 
-    FONT_CANDIDATES = {
-        "zh_CN": ["Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "宋体",
-                  "Meiryo", "Yu Gothic", "MS Gothic", "Arial Unicode MS"],
-        "ja": ["MS Gothic", "Meiryo", "Yu Gothic", "MS UI Gothic", "Microsoft YaHei",
-               "Microsoft YaHei UI", "SimSun", "宋体", "Arial Unicode MS"],
-    }
+    if plat.IS_MAC:
+        FONT_CANDIDATES = {
+            "zh_CN": ["PingFang SC", "Hiragino Sans GB", "Heiti SC", "STHeiti", "Hiragino Sans",
+                      "Hiragino Kaku Gothic ProN", "Arial Unicode MS"],
+            "ja": ["Hiragino Sans", "Hiragino Kaku Gothic ProN", "Osaka", "PingFang SC",
+                   "Hiragino Sans GB", "Arial Unicode MS"],
+        }
+    else:
+        FONT_CANDIDATES = {
+            "zh_CN": ["Microsoft YaHei", "Microsoft YaHei UI", "DengXian", "SimHei", "SimSun", "宋体",
+                      "Meiryo", "Yu Gothic", "MS Gothic", "Arial Unicode MS"],
+            "ja": ["MS Gothic", "Meiryo", "Yu Gothic", "MS UI Gothic", "Microsoft YaHei",
+                   "Microsoft YaHei UI", "SimSun", "宋体", "Arial Unicode MS"],
+        }
 
     def _font_resolve(self, name):
         """Family Tk actually uses for *name*, or None if it is not installed."""
@@ -1521,7 +1560,11 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
     def _font_missing_chars(family, text):
         """Characters of *text* that the font does not contain (Windows GDI)."""
         chars = "".join(sorted(set(c for c in text if ord(c) > 0x7f and not c.isspace())))
-        if not chars or sys.platform != "win32":
+        if not chars:
+            return ""
+        if plat.IS_MAC:
+            return plat.mac_font_missing_chars(family, chars)
+        if not plat.IS_WIN:
             return ""
         try:
             import ctypes
@@ -2842,6 +2885,8 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
                                                      self.tt("Version,unicode", "")))
 
     def listboxScroll(self, w, d):
+        if plat.IS_MAC:
+            return   # Tk's Listbox class binding scrolls natively (deltas are not 120 steps)
         if w:
             try:
                 self.root.nametowidget(w).yview_scroll(int(-d / 120), "units")
