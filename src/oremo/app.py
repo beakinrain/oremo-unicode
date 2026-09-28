@@ -1547,9 +1547,17 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             self._font_cache = {}
             fams = set(tkfont.families(self.root))
             self._font_fams = fams
-            self._font_missing = tkfont.Font(self.root, family="__no_such_font__").actual("family")
+            self._font_fams_lc = {f.lower(): f for f in fams}
+            self._font_missing = None if plat.IS_MAC else \
+                tkfont.Font(self.root, family="__no_such_font__").actual("family")
         if name in self._font_cache:
             return self._font_cache[name]
+        if plat.IS_MAC:
+            # macOS lists fonts under their real names; asking Tk to resolve an
+            # uninstalled family can block, so only use the family list there
+            res = self._font_fams_lc.get(name.lower())
+            self._font_cache[name] = res
+            return res
         actual = tkfont.Font(self.root, family=name).actual("family")
         ok = name in self._font_fams or (actual in self._font_fams and actual != self._font_missing)
         res = actual if ok else None
