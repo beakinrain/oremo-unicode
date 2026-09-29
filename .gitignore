@@ -9,3 +9,4 @@ res/oremo-init.tcl
 res/result/*
 !res/result/.gitkeep
 test-artifacts/
+release/
