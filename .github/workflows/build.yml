@@ -96,3 +96,48 @@ jobs:
         env:
           PYTHONIOENCODING: utf-8
         run: python tests/smoke_test.py zh_CN
+
+  # Report-only Defender scan of the published U1 package and a fresh build
+  # (a user reported Trojan:Win32/Bearfoos.B!ml on U1's oremo.exe).
+  # Samples are never uploaded and nothing is quarantined.
+  windows-av-scan:
+    runs-on: windows-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Prepare Defender (cloud lookup on, sample upload off)
+        shell: pwsh
+        run: |
+          Set-MpPreference -SubmitSamplesConsent 2 -MAPSReporting 2
+          & "$env:ProgramFiles\Windows Defender\MpCmdRun.exe" -SignatureUpdate
+          Get-MpComputerStatus | Select-Object AMServiceEnabled,AntivirusEnabled,RealTimeProtectionEnabled,AMProductVersion,AntivirusSignatureVersion | Format-List
+          Get-MpPreference | Select-Object MAPSReporting,SubmitSamplesConsent,CloudBlockLevel | Format-List
+
+      - name: Fetch U1 release and build current source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download v3.0-U1 -p "OREMO-Unicode-3.0-U1-windows-x64.zip" -D scan
+          Expand-Archive scan/OREMO-Unicode-3.0-U1-windows-x64.zip scan/u1
+          pip install numpy sounddevice pyinstaller
+          pyinstaller oremo.spec --noconfirm
+          New-Item -ItemType Directory scan/fresh | Out-Null
+          Copy-Item dist/OREMO scan/fresh -Recurse
+
+      - name: Scan (no remediation)
+        shell: pwsh
+        run: |
+          $mp = "$env:ProgramFiles\Windows Defender\MpCmdRun.exe"
+          Get-ChildItem scan -Recurse -Include *.exe,*.dll,*.pyd | ForEach-Object {
+            $h = (Get-FileHash $_.FullName).Hash.Substring(0,16)
+            $out = & $mp -Scan -ScanType 3 -File $_.FullName -DisableRemediation 2>&1 | Out-String
+            $hit = if ($LASTEXITCODE -eq 2) { "THREAT" } elseif ($LASTEXITCODE -eq 0) { "clean" } else { "exit $LASTEXITCODE" }
+            "{0,-8} {1} {2} {3}" -f $hit, $h, $_.Length, $_.FullName
+            if ($LASTEXITCODE -eq 2) { $out }
+          }
+          Get-MpThreatDetection | Format-List
