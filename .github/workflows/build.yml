@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   macos:
-    runs-on: macos-14          # Apple Silicon (arm64)
+    runs-on: macos-15          # Apple Silicon (arm64); macos-14 image retired
     env:
       PYVER: "3.12.10"
     steps:
