@@ -143,6 +143,24 @@ for k, val in (("showMinTone", "C"), ("showMinOctave", 2), ("showMaxTone", "B"),
                ("unit", "semitone"), ("fixShowRange", 1), ("method", "ESPS")):
     app.f0[k] = val
 step("apply defaults", apply_btn.invoke)
+
+# per-row "repeat" buttons must play that row's pitch, not the guide pitch
+played = []
+_orig_playSin = app.playSin
+app.playSin = lambda f, vol, ln: played.append((round(float(f)), int(ln)))
+app.f0["guideTone"], app.f0["guideOctave"] = "A", 4
+rep = app.tt("packToneList,repeat")
+rows = {}
+for wd in walk(w):
+    if isinstance(wd, tk.Button) and wd.cget("text") == rep:
+        rows[str(wd.master).rsplit(".", 1)[-1]] = wd
+v["playOnsaStatus"] = 0
+step("repeat max", rows["tl1"].invoke)          # B5 -> 988 Hz, continuous
+step("repeat min (switch)", rows["tl2"].invoke)  # C2 -> 65 Hz, switches tone
+step("repeat min (stop)", rows["tl2"].invoke)
+check("repeat plays row pitch", played == [(988, -1), (65, -1)] and v.i("playOnsaStatus") == 0, str(played))
+app.playSin = _orig_playSin
+app.onsa_player.stop()
 for p in (".settings", ".iosettings", ".converter", ".fixSettings", ".encSettings"):
     try:
         root.nametowidget(p).destroy()

@@ -514,7 +514,7 @@ class DialogsMixin:
         tk.Button(w, image=self.icons["snackPlay"], text=self.tt("packToneList,play"),
                   command=lambda: self.playSin(self.tone2freq(f0[toneKey] + f0[octaveKey]), f0[vol],
                                                v.i("sampleRate"))).pack(side="left")
-        tk.Button(w, text=self.tt("packToneList,repeat"), command=self.toggleOnsaPlay).pack(side="left")
+        tk.Button(w, text=self.tt("packToneList,repeat"), command=lambda: self.toggleOnsaPlay(toneKey, octaveKey, vol)).pack(side="left")
         tk.Label(w, textvariable="f0(%s)" % freqKey, width=3, anchor="e").pack(side="left")
         tk.Label(w, text="Hz").pack(side="left")
         return w

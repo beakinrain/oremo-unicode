@@ -22,7 +22,7 @@ from .state import TclArray, TVar
 from .tools import ToolsMixin
 
 APPNAME = "OREMO"
-VERSION = "3.0-b190106-U1"
+VERSION = "3.0-b190106-U2"
 
 TONE_LIST = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
@@ -1787,8 +1787,9 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
                 nxt = cur
         f0["guideTone"] = tl[nxt]
         if v.i("playOnsaStatus"):
-            self.toggleOnsaPlay()
-            self.toggleOnsaPlay()
+            keys = getattr(self, "_onsa_keys", ("guideTone", "guideOctave", "guideVol"))
+            self.toggleOnsaPlay(*keys)
+            self.toggleOnsaPlay(*keys)
 
     # ------------------------------------------------------------------
     # output device helpers
@@ -1841,16 +1842,24 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             except audio.AudioError as e:
                 self._play_error(e)
 
-    def toggleOnsaPlay(self):
+    def toggleOnsaPlay(self, toneKey="guideTone", octaveKey="guideOctave", volKey="guideVol"):
+        """Toggle the continuous tone.  The settings window's per-row
+        "repeat" buttons pass their own keys so the row's pitch is played
+        (not the guide pitch); pressing another row's button while a tone
+        is sounding switches to that row's pitch instead of stopping."""
         v, f0 = self.v, self.f0
-        if v.i("playOnsaStatus"):
+        keys = (toneKey, octaveKey, volKey)
+        playing = v.i("playOnsaStatus")
+        if playing:
             v["msg"] = self.tt("toggleOnsaPlay,stopMsg")
             self.onsa_player.stop()
             v["playOnsaStatus"] = 0
-        else:
-            v["msg"] = self.tt("toggleOnsaPlay,playMsg")
-            v["playOnsaStatus"] = 1
-            self.playSin(self.tone2freq(f0["guideTone"] + f0["guideOctave"]), f0["guideVol"], -1)
+            if getattr(self, "_onsa_keys", keys) == keys:
+                return
+        v["msg"] = self.tt("toggleOnsaPlay,playMsg")
+        v["playOnsaStatus"] = 1
+        self._onsa_keys = keys
+        self.playSin(self.tone2freq(f0[toneKey] + f0[octaveKey]), f0[volKey], -1)
 
     # ------------------------------------------------------------------
     # navigation
