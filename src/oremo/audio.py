@@ -164,6 +164,31 @@ def pa_device_label(d):
     return "%d: %s, API=%s" % (d[0], d[1], d[2])
 
 
+def resolve_pa_device(selection, devices):
+    """Match a saved device label to the current enumeration."""
+    identity = selection.partition(": ")[2]
+    if not identity:
+        return None
+    candidates = []
+    for device in devices:
+        label = pa_device_label(device)
+        if label == selection:
+            return device
+        if label.partition(": ")[2] == identity:
+            candidates.append(device)
+    return candidates[0] if len(candidates) == 1 else None
+
+
+def input_stream_options(device, channels, first_channel):
+    if first_channel == 1:
+        return {}
+    max_channels = sd.query_devices(device, "input")["max_input_channels"]
+    if first_channel < 1 or first_channel + channels - 1 > max_channels:
+        raise AudioError("Selected input channel range is unavailable.")
+    return {"extra_settings": sd.CoreAudioSettings(
+        channel_map=list(range(first_channel - 1, first_channel - 1 + channels)))}
+
+
 def default_device(kind):
     if sd is None:
         return None
@@ -177,13 +202,14 @@ def default_device(kind):
         return None
 
 
-def check_settings(kind, device, rate, channels, dtype):
+def check_settings(kind, device, rate, channels, dtype, first_channel=1):
     """Return '' when the settings are usable, else an error text."""
     if sd is None:
         return "sounddevice (PortAudio) is not available"
     try:
         if kind == "input":
-            sd.check_input_settings(device=device, samplerate=rate, channels=channels, dtype=dtype)
+            sd.check_input_settings(device=device, samplerate=rate, channels=channels, dtype=dtype,
+                                    **input_stream_options(device, channels, first_channel))
         else:
             sd.check_output_settings(device=device, samplerate=rate, channels=channels, dtype=dtype)
     except Exception as e:
@@ -450,29 +476,36 @@ class Recorder:
     def is_open(self):
         return self.stream is not None
 
-    def open(self, device, rate, channels, dtype, blocksize=0, gain=1.0):
+    def prepare(self, rate, channels, dtype, gain):
         self.close()
-        if sd is None:
-            raise AudioError("audio is not available")
         self.dtype = dtype
         self.rate = int(rate)
         self.channels = int(channels)
         self.gain = gain
 
+    def append(self, indata):
+        if self.capturing:
+            with self.lock:
+                if self.capturing:
+                    self.blocks.append(indata.copy())
+
+    def open(self, device, rate, channels, dtype, blocksize=0, gain=1.0, first_channel=1):
+        self.prepare(rate, channels, dtype, gain)
+        if sd is None:
+            raise AudioError("audio is not available")
+
         def callback(indata, frames, time, status):
-            if self.capturing:
-                with self.lock:
-                    if self.capturing:
-                        self.blocks.append(indata.copy())
+            self.append(indata)
 
         try:
             self.stream = sd.InputStream(samplerate=self.rate, channels=self.channels,
                                          dtype=dtype, device=device, callback=callback,
-                                         blocksize=blocksize)
+                                         blocksize=blocksize,
+                                         **input_stream_options(device, self.channels, first_channel))
             self.stream.start()
         except Exception as e:
-            self.stream = None
-            raise AudioError(str(e))
+            self.close()
+            raise AudioError(str(e)) from e
 
     def begin(self):
         with self.lock:
@@ -556,7 +589,8 @@ class AutoRecEngine:
     def active(self):
         return self.stream is not None
 
-    def start(self, bgm_data, rate, rows, mode, handler, can_next, device=None, gain=1.0):
+    def start(self, bgm_data, rate, rows, mode, handler, can_next, device=None, gain=1.0,
+              duplex_channel=None):
         """handler(event, seq) is called in the UI thread with events
         'row' (actions for row seq), 'stop'.  can_next() is evaluated in the
         audio thread and must be cheap (returns True if nextRec is allowed)."""
@@ -597,7 +631,7 @@ class AutoRecEngine:
         if not fire(1):
             return
 
-        def callback(outdata, frames, time, status):
+        def render(outdata, frames, indata=None):
             if st["stopped"] or token != self.token:
                 outdata.fill(0)
                 raise sd.CallbackStop
@@ -627,6 +661,8 @@ class AutoRecEngine:
                     outdata[done:done + k, 0] = seg if vol == 1.0 else np.clip(seg * vol, -1.0, 1.0)
                 if k < m:
                     outdata[done + k:done + m, 0] = 0
+                if indata is not None:
+                    self.recorder.append(indata[done:done + m])
                 done += m
                 st["pos"] = p + m
             if done < frames:
@@ -635,13 +671,27 @@ class AutoRecEngine:
                 raise sd.CallbackStop
             self.pos = st["pos"]
 
+        def output_callback(outdata, frames, time, status):
+            render(outdata, frames)
+
+        def duplex_callback(indata, outdata, frames, time, status):
+            render(outdata, frames, indata)
+
         try:
-            self.stream = sd.OutputStream(samplerate=int(rate), channels=1, dtype="float32",
-                                          device=device, callback=callback)
+            if duplex_channel is None:
+                self.stream = sd.OutputStream(samplerate=int(rate), channels=1, dtype="float32",
+                                              device=device, callback=output_callback)
+            else:
+                options = input_stream_options(device, self.recorder.channels, duplex_channel)
+                self.stream = sd.Stream(samplerate=int(rate), device=device,
+                                        channels=(self.recorder.channels, 1),
+                                        dtype=(self.recorder.dtype, "float32"),
+                                        extra_settings=(options.get("extra_settings"), None),
+                                        callback=duplex_callback)
             self.stream.start()
         except Exception as e:
-            self.stream = None
-            raise AudioError(str(e))
+            self.stop()
+            raise AudioError(str(e)) from e
 
     def _ui_event(self, token, ev, seq):
         if token != self.token:
