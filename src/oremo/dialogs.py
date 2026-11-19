@@ -8,7 +8,7 @@ import tkinter.colorchooser as colorchooser
 import tkinter.filedialog as filedialog
 import tkinter.messagebox as messagebox
 
-from . import audio
+from . import audio, plat
 from .state import TVar
 
 TONE_LIST = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
@@ -777,7 +777,8 @@ class DialogsMixin:
     def paRecRun(self, quiet=False):
         if self.pa_rec_on:
             return 0
-        devs = [audio.pa_device_label(d) for d in audio.list_devices("input")]
+        devices = audio.list_devices("input")
+        devs = [audio.pa_device_label(d) for d in devices]
         self.paDev["devList"] = devs if devs else ["none"]
         menu = getattr(self, "_pa_in_menu", None)
         if menu is not None and menu.winfo_exists():
@@ -788,9 +789,12 @@ class DialogsMixin:
             if not quiet:
                 messagebox.showwarning(self.tt(".confm.errTitle"), self.tt("paRecRun,errDev"))
             return 1
-        if self.paDev["in"] == "none" or self.paDev["in"] not in devs:
-            if self.paDev["in"] == "none":
-                self.paDev["in"] = devs[0]
+        selected = self.paDev["in"]
+        device = audio.resolve_pa_device(selected, devices)
+        if device is not None:
+            self.paDev["in"] = audio.pa_device_label(device)
+        elif selected == "none":
+            self.paDev["in"] = devs[0]
         self.pa_rec_on = True
         self.updateIoSettings()
         return 0
@@ -829,13 +833,13 @@ class DialogsMixin:
             return
         normal, black, disabled, gray = [], [], [], []
         if self.pa_rec_on:
-            normal += ["pf.in", "pf.esr", "pf.fmt", "pf.ech", "pf.ebs"]
-            black += ["pf.lin", "pf.lsr", "pf.lbt", "pf.lch", "pf.lbs"]
+            normal += ["pf.in", "pf.esr", "pf.fmt", "pf.ech", "pf.first", "pf.ebs"]
+            black += ["pf.lin", "pf.lsr", "pf.lbt", "pf.lch", "pf.lfirst", "pf.lbs"]
             disabled += ["sf.f1.in", "sf.f3.e", "sf.f3.s", "sf.f6.e"]
             gray += ["sf.f1.lin", "sf.f3.l", "sf.f6.l", "sf.f6.u"]
         else:
-            disabled += ["pf.in", "pf.ech"]
-            gray += ["pf.lin", "pf.lch"]
+            disabled += ["pf.in", "pf.ech", "pf.first"]
+            gray += ["pf.lin", "pf.lch", "pf.lfirst"]
             normal += ["sf.f1.in", "sf.f3.e", "sf.f3.s", "sf.f5.e", "sf.f6.e"]
             black += ["sf.f1.lin", "sf.f3.l", "sf.f5.l", "sf.f5.u", "sf.f6.l", "sf.f6.u"]
         if self.pa_play_on:
@@ -900,9 +904,13 @@ class DialogsMixin:
             dID = check_common("setIODevice,errPa2")
             if dID is None:
                 return 1
+            first_channel = pa.i("firstChannel") if plat.IS_MAC else 1
+            if first_channel < 1:
+                messagebox.showwarning(t(".confm.errTitle"), t("setIODevice,errPa3"))
+                return 1
             fmt = pa.get("sampleFormat", "Int16")
             err = audio.check_settings("input", dID, pa.i("sampleRate"), max(1, pa.i("channel")),
-                                       audio.FORMAT_DTYPE.get(fmt, "int16"))
+                                       audio.FORMAT_DTYPE.get(fmt, "int16"), first_channel=first_channel)
             if err:
                 messagebox.showwarning(t(".confm.errTitle"), "%s\n%s" % (t("setIODevice,errPa"), err))
                 return 1
@@ -1017,6 +1025,11 @@ class DialogsMixin:
         tk.Label(pf, name="lbs", text=t("ioSettings,bufferSize"), anchor="w").grid(row=5, column=0, sticky="w")
         tk.Entry(pf, name="ebs", textvariable="paDev(bufferSize)", width=6, validate="key",
                  validatecommand=intv).grid(row=5, column=1, sticky="w")
+        if plat.IS_MAC:
+            tk.Label(pf, name="lfirst", text=t("ioSettings,firstInputChannel"), anchor="w").grid(
+                row=6, column=0, sticky="w")
+            tk.Entry(pf, name="first", textvariable="paDev(firstChannel)", width=6, validate="key",
+                     validatecommand=intv).grid(row=6, column=1, sticky="w")
         # names used by updateIoSettings
         self._io_alias = {"pf.in": om_in, "pf.out": om_out, "pf.fmt": om_fmt}
 

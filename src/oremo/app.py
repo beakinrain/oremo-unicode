@@ -475,6 +475,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         p["sampleRate"] = 44100
         p["sampleFormat"] = "Int16"
         p["channel"] = 1
+        p["firstChannel"] = 1
         p["bufferSize"] = 2048
 
     # ------------------------------------------------------------------
@@ -1803,8 +1804,8 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
 
     def _pa_device(self, kind):
         s = self.paDev.get("in" if kind == "input" else "out", "")
-        m = re.match(r"^([0-9]+)", s)
-        return int(m.group(1)) if m else None
+        device = audio.resolve_pa_device(s, audio.list_devices(kind))
+        return device[0] if device is not None else None
 
     def out_device(self):
         if self.paDev.i("usePlay"):
@@ -2003,16 +2004,20 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
     # recording (manual)
 
     def _rec_params(self):
-        """Returns dict(device, rate, channels, dtype, enc, blocksize, gain)."""
+        """Return the selected input and recording format."""
         if self.paDev.i("useRec"):
             fmt = self.paDev.get("sampleFormat", "Int16")
-            return dict(device=self._pa_device("input"), rate=self.paDev.i("sampleRate") or 44100,
+            device = self._pa_device("input")
+            if device is None:
+                raise audio.AudioError(self.tt("setIODevice,errPa2"))
+            return dict(device=device, rate=self.paDev.i("sampleRate") or 44100,
+                        first_channel=max(1, self.paDev.i("firstChannel")) if plat.IS_MAC else 1,
                         channels=max(1, self.paDev.i("channel") or 1),
                         dtype=audio.FORMAT_DTYPE.get(fmt, "int16"),
                         enc=audio.FORMAT_ENC.get(fmt, "Lin16"),
                         blocksize=self.paDev.i("bufferSize") or 0, gain=1.0)
         return dict(device=self._snack_device("input"), rate=self.v.i("sampleRate") or 44100,
-                    channels=1, dtype="int16", enc="Lin16", blocksize=0,
+                    channels=1, first_channel=1, dtype="int16", enc="Lin16", blocksize=0,
                     gain=self.dev.f("ingain", 100.0) / 100.0)
 
     # ------------------------------------------------------------------
@@ -2048,18 +2053,20 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
     # take) and rapid open/close cycles can hang the audio system
     RECORDER_IDLE_CLOSE = 30000   # msec
 
-    def _open_recorder(self):
-        p = self._rec_params()
+    def _open_recorder(self, params=None, duplex=False):
+        p = self._rec_params() if params is None else params
         job = getattr(self, "_rec_close_job", None)
         if job is not None:
             self.root.after_cancel(job)
             self._rec_close_job = None
-        key = (p["device"], p["rate"], p["channels"], p["dtype"], p["blocksize"])
-        if self.recorder.is_open() and getattr(self, "_rec_key", None) == key:
+        key = (p["device"], p["rate"], p["channels"], p["dtype"], p["blocksize"], p["first_channel"])
+        if duplex:
+            self.recorder.prepare(p["rate"], p["channels"], p["dtype"], p["gain"])
+        elif self.recorder.is_open() and getattr(self, "_rec_key", None) == key:
             self.recorder.gain = p["gain"]
         else:
             self.recorder.open(p["device"], p["rate"], p["channels"], p["dtype"],
-                               blocksize=p["blocksize"], gain=p["gain"])
+                               blocksize=p["blocksize"], gain=p["gain"], first_channel=p["first_channel"])
             self._rec_key = key
         self._take_params = p
 
@@ -2248,15 +2255,17 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
 
         if not self.paDev.i("usePlay"):
             self.snd.configure(channels=1, rate=v.i("sampleRate"), encoding="Lin16")
+        dev, gain, _lat, _bs = self.out_device()
         try:
-            self._open_recorder()
+            params = self._rec_params()
+            # Share one Core Audio stream when the guide and mic use the same device.
+            duplex = plat.IS_MAC and dev is not None and dev == params["device"] and sr == params["rate"]
+            self._open_recorder(params, duplex=duplex)
         except audio.AudioError as e:
             messagebox.showwarning(t(".confm.errTitle"), "%s\n%s" % (t("aRecStart,errPa"), e))
             return
         self.bgmParam["autoRecStatus"] = 1
-        v["recStatus"] = 1
         self.msgLabel.configure(fg="blue")
-        dev, gain, _lat, _bs = self.out_device()
         self._sync_cache()
         mode = v.i("rec")
 
@@ -2266,9 +2275,12 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         self._apply_bgm_volume()
         try:
             self.auto_engine.start(self.bgm.data, self.bgm.rate, rows, mode, self._autoRecEvent,
-                                   can_next, device=dev, gain=gain)
+                                   can_next, device=dev, gain=gain,
+                                   duplex_channel=params["first_channel"] if duplex else None)
+            v["recStatus"] = 1
         except audio.AudioError as e:
             self.bgmParam["autoRecStatus"] = 0
+            self.msgLabel.configure(fg="black")
             self.recorder.close()
             messagebox.showwarning(t(".confm.errTitle"), "%s\n%s" % (t("aRecStart,errPa"), e))
 
@@ -2303,8 +2315,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
         v = self.v
         if v.i("rec") == 0 or v.i("recNow") or self.bgmParam.i("autoRecStatus") == 0:
             return
-        if not self.recorder.capturing:
-            self.recorder.begin()
+        # The audio callback starts each take at the BGM cue.
         v["recNow"] = 1
         v["recStatus"] = 1
         self._live_start()
@@ -2935,7 +2946,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
             val = self.ini("audio.dev." + key, None)
             if val is not None:
                 self.dev[key] = val
-        for key in ("in", "out", "sampleRate", "sampleFormat", "channel", "bufferSize",
+        for key in ("in", "out", "sampleRate", "sampleFormat", "channel", "firstChannel", "bufferSize",
                     "useRequestRec", "useRequestPlay"):
             val = self.ini("audio.paDev." + key, None)
             if val is not None:
@@ -2950,7 +2961,7 @@ class OremoApp(DialogsMixin, GenParamMixin, ToolsMixin):
     def _save_audio_settings(self):
         for key in ("in", "out", "ingain", "outgain", "latency", "sndBuffer", "bgmBuffer"):
             self.sysini["audio.dev." + key] = self.dev.get(key, "")
-        for key in ("in", "out", "sampleRate", "sampleFormat", "channel", "bufferSize"):
+        for key in ("in", "out", "sampleRate", "sampleFormat", "channel", "firstChannel", "bufferSize"):
             self.sysini["audio.paDev." + key] = self.paDev.get(key, "")
         self.sysini["audio.paDev.useRequestRec"] = self.paDev.get("useRec", "0")
         self.sysini["audio.paDev.useRequestPlay"] = self.paDev.get("usePlay", "0")
