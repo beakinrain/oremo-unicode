@@ -22,7 +22,7 @@ from .state import TclArray, TVar
 from .tools import ToolsMixin
 
 APPNAME = "OREMO"
-VERSION = "3.0-b190106-U2"
+VERSION = "3.0-b190106-U2_fix1"
 
 TONE_LIST = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 

@@ -1,6 +1,6 @@
 ﻿###################################################################
 
-  OREMO Unicode版  3.0-b190106-U1
+  OREMO Unicode版  3.0-b190106-U2_fix1
   (OREMO 3.0-b190106 的完全重写版，Python + Tk 实现)
 
   原作者: nwp8861   http://nwp8861.web.fc2.com/soft/oremo/
